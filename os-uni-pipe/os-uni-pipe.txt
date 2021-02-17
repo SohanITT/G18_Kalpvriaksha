@@ -29,11 +29,9 @@ int *create_pipe()
     return pipe_fd;
 }
 
-
 //Write a message to the pipe_fd
 size_t send_message(int pipe_fd_fd, char * message)
-{
-   
+{   
     size_t size = write(pipe_fd_fd,message,strlen(message));
        return size;
 }

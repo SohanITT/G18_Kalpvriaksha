@@ -14,6 +14,7 @@ void open_file();
 size_t read_file(FILE *fp,char *buffer,int length);
 void process_students();
 void move_to_next_student(FILE *fp, int current);
+
 typedef struct student_type
 {
 	int id;

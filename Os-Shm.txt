@@ -1,0 +1,127 @@
+#include<stdio.h> 
+#include<stdlib.h> 
+#include<unistd.h> 
+#include<sys/types.h> 
+#include<string.h> 
+#include<sys/wait.h> 
+#include <stdio.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+void child();
+void parent();  
+void process_stage(int stage);
+int g_sharedMemoryId;
+int stages=0;
+
+int create_shared_mem(int size)
+{
+    int shared_memory_id = shmget(IPC_PRIVATE,size,IPC_CREAT|0666);
+ 	return shared_memory_id;
+}
+
+void write_message(int sharedMemoryId, char * message)
+{
+    char *p_sharedMemoryAttached = (char *)shmat(sharedMemoryId,NULL,0);
+    memcpy(p_sharedMemoryAttached,message,strlen(message));
+    shmdt(p_sharedMemoryAttached);
+}
+
+char *read_message(int sharedMemoryId, int length)
+{
+    char *p_message = (char*)malloc(length);
+    char *p_shared_memory_attached  = (char *)shmat(sharedMemoryId,NULL,0);
+    memcpy(p_message,p_shared_memory_attached,length);
+    shmdt(p_shared_memory_attached);
+    return p_message;
+}
+void remove_shared_mem(int sharedMemoryId)
+{
+ shmctl(sharedMemoryId,IPC_RMID,NULL);
+}
+
+//-----DO NOT MODIFY THE CODE BELOW-----
+
+//Get the exit code of the child.
+int get_child_exit_status()
+{
+        int stat;
+        wait(&stat);
+        return WEXITSTATUS(stat);
+}
+void child(){
+		
+
+	for(int i = 1; i <= stages; i++)	
+	{
+		char message[32];
+		sprintf(message,"%s%d","STAGE",i);
+		process_stage(i);
+ 		//Stage 1 done	
+		write_message(g_sharedMemoryId, message);
+		usleep(10000);		
+	}
+
+        exit(stages); 
+}
+void parent()
+{
+	char *p_last_message=NULL;
+	char *p_message=NULL; 
+
+	for(int i = 1; i <= stages; i++)	
+	{
+		printf("Waiting for the child to finish the stage:%d\n",i);
+		fflush(stdout);
+		//usleep(1000);
+		//The following loop is a hack to ensure parent waits for the
+   		//new message from child in a loop. In future we will use
+		//Semaphore to ensure synchronization.
+		do
+		{
+			usleep(1000);
+
+			p_last_message = p_message;
+			p_message = read_message(g_sharedMemoryId,32);	
+
+		}while((p_last_message == NULL && p_message == NULL) 
+		|| (p_last_message != NULL && strcmp(p_last_message,p_message) == 0));
+
+		printf("STAGE completed:%s\n",p_message);
+
+		fflush(stdout);
+	}
+
+	printf("Child exited with status:%d\n",get_child_exit_status());
+	remove_shared_mem(g_sharedMemoryId);
+}
+
+void process_stage(int stage)
+{
+	//
+	//Some complex logic is executed here, we just do a printf for now
+	//
+	printf("Procesing stage%d\n",stage);
+	usleep(1);
+	fflush(stdout);
+}
+
+int main(int argc, char* argv[]) 
+{ 
+	pid_t childProcessId; 
+	g_sharedMemoryId = create_shared_mem(100); 
+	if(g_sharedMemoryId == 0 )
+	{
+		printf("Shared Mem creation failed\n");
+	}
+	scanf("%d",&stages);
+	childProcessId = fork(); 
+
+	// Parent process 
+	if (childProcessId == 0) 
+	{ 
+		child();
+	} else if(childProcessId > 0 )
+	{
+		parent();
+	}
+} 
